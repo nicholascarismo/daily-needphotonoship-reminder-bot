@@ -1,0 +1,64 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DROPLET_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Rsync to VPS
+        env:
+          HOST: ${{ secrets.DROPLET_HOST }}
+          USER: ${{ secrets.DROPLET_USER }}
+          REMOTE_DIR: ${{ secrets.REMOTE_DIR }}
+        run: |
+          rsync -az --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            ./ $USER@$HOST:$REMOTE_DIR/
+
+      - name: Install deps & reload with PM2
+        run: |
+          ssh ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_HOST }} << 'EOF'
+          set -e
+          echo "REMOTE_DIR=${{ secrets.REMOTE_DIR }}"
+          cd "${{ secrets.REMOTE_DIR }}"
+          echo "PWD=$(pwd)"
+          echo "Listing files in REMOTE_DIR:"
+          ls -la
+
+          # Show Node/npm versions on the droplet for sanity
+          node -v || true
+          npm -v || true
+
+          # Prefer ci when lockfile exists, otherwise install
+          if [ -f package-lock.json ]; then
+            echo "Lockfile present -> npm ci"
+            npm ci
+          else
+            echo "No lockfile -> npm install"
+            npm install
+          fi
+
+          # Start if not running; otherwise reload
+          PROC_NAME="$(basename "${{ secrets.REMOTE_DIR }}")"
+          pm2 describe "$PROC_NAME" >/dev/null 2>&1 || pm2 start index.js --name "$PROC_NAME"
+          pm2 reload "$PROC_NAME"
+          pm2 save
+          EOF
