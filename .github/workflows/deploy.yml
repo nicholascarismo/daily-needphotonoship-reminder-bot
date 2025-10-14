@@ -44,6 +44,9 @@ jobs:
             source ~/.profile;
             cd \"${{ secrets.REMOTE_DIR }}\";
             export NPM_CONFIG_FUND=false;
+            if [ ! -f package-lock.json ]; then
+              npm install --package-lock-only;
+            fi;
             npm ci --omit=dev;
             if pm2 describe daily-needphotonoship-reminder >/dev/null 2>&1; then
               pm2 reload daily-needphotonoship-reminder --update-env;
