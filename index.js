@@ -1,31 +1,14 @@
 import 'dotenv/config';
 import boltPkg from '@slack/bolt';
 
-const { App, ExpressReceiver } = boltPkg;
+const { App } = boltPkg;
 
-/* =========================
-   Slack HTTP Receiver
-========================= */
-const receiver = new ExpressReceiver({
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
-  endpoints: {
-    events: '/slack/events',
-    commands: '/slack/command',
-    interactive: '/slack/interactive',
-  },
-});
-receiver.app.get('/', (_req, res) => res.status(200).type('text/plain').send('OK'));
-receiver.app.get('/health', (_req, res) => res.status(200).type('text/plain').send('OK'));
-receiver.app.get('/wake', (_req, res) => {
-  res.status(200).type('text/plain').send('awake');
-});
-receiver.app.get('/version', (_req, res) =>
-  res.status(200).json({ SHOPIFY_API_VERSION: process.env.SHOPIFY_API_VERSION || '2025-10' })
-);
-
+// --- Socket Mode Bolt app (no ExpressReceiver) ---
 const app = new App({
-  token: process.env.SLACK_BOT_TOKEN,
-  receiver,
+  token: process.env.SLACK_BOT_TOKEN,   // xoxb-...
+  appToken: process.env.SLACK_APP_TOKEN, // xapp-... (App-Level Token, connections:write)
+  socketMode: true,
+  processBeforeResponse: true
 });
 
 /* =========================
@@ -550,10 +533,9 @@ app.action('make_trello', async ({ ack, body, client, logger }) => {
    Start
 ========================= */
 (async () => {
-  const port = process.env.PORT || 3000;
-  await app.start(port);
-  console.log(`✅ daily-needphotonoship-reminder bot running on port ${port}`);
-  console.log('🔧 Watching channel ID:', WATCH_CHANNEL || '(not set)');
+  await app.start(); // no port in Socket Mode
+  console.log('✅ daily-needphotonoship-reminder bot running (Socket Mode)');
+  console.log('🔧 Watching channel ID:', process.env.FORWARD_CHANNEL_ID || process.env.ORDER_EMAIL_CHANNEL_ID || '(not set)');
 
   try {
     await resolveTrelloIds();
