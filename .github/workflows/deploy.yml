@@ -2,63 +2,52 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:
+    branches: ["main"]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup SSH
+      - name: Start ssh-agent and add key
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Add VPS to known_hosts
+      - name: Add droplet host key to known_hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.DROPLET_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p 22 ${{ secrets.DROPLET_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Rsync to VPS
-        env:
-          HOST: ${{ secrets.DROPLET_HOST }}
-          USER: ${{ secrets.DROPLET_USER }}
-          REMOTE_DIR: ${{ secrets.REMOTE_DIR }}
+      - name: Create .env from ENV_FILE secret (in workspace)
+        run: |
+          printf "%s" "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Ensure remote directory exists
+        run: ssh "${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_HOST }}" "mkdir -p '${{ secrets.REMOTE_DIR }}'"
+
+      - name: Rsync repo to droplet (keep .env)
         run: |
           rsync -az --delete \
-            --exclude ".git" \
-            --exclude ".github" \
-            ./ $USER@$HOST:$REMOTE_DIR/
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude '.github' \
+            ./  "${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_HOST }}:${{ secrets.REMOTE_DIR }}/"
 
-      - name: Install deps & reload with PM2
-        run: |
-          ssh ${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_HOST }} << 'EOF'
-          set -e
-          echo "REMOTE_DIR=${{ secrets.REMOTE_DIR }}"
-          cd "${{ secrets.REMOTE_DIR }}"
-          echo "PWD=$(pwd)"
-          echo "Listing files in REMOTE_DIR:"
-          ls -la
-
-          # Show Node/npm versions on the droplet for sanity
-          node -v || true
-          npm -v || true
-
-          # Prefer ci when lockfile exists, otherwise install
-          if [ -f package-lock.json ]; then
-            echo "Lockfile present -> npm ci"
-            npm ci
-          else
-            echo "No lockfile -> npm install"
-            npm install
-          fi
-
-          # Start if not running; otherwise reload
-          PROC_NAME="$(basename "${{ secrets.REMOTE_DIR }}")"
-          pm2 describe "$PROC_NAME" >/dev/null 2>&1 || pm2 start index.js --name "$PROC_NAME"
-          pm2 reload "$PROC_NAME"
-          pm2 save
-          EOF
+      - name: Install deps & (re)start with PM2
+        run: >
+          ssh "${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_HOST }}"
+          "bash -lc 'set -euo pipefail;
+            source ~/.profile;
+            cd \"${{ secrets.REMOTE_DIR }}\";
+            export NPM_CONFIG_FUND=false;
+            npm ci --omit=dev;
+            if pm2 describe daily-needphotonoship-reminder >/dev/null 2>&1; then
+              pm2 reload daily-needphotonoship-reminder --update-env;
+            else
+              pm2 start index.js --name daily-needphotonoship-reminder;
+            fi;
+            pm2 save'"
