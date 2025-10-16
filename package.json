@@ -1,5 +1,5 @@
 {
-  "name": "daily-needphotonoship-reminder",
+  "name": "daily-needphotonoship-reminder-bot",
   "private": true,
   "type": "module",
   "engines": { "node": ">=18" },
