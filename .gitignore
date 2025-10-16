@@ -27,8 +27,9 @@ coverage/
 .vscode/
 .idea/
 EOF
-.DS_Store
-.github/.DS_Store
-.DS_Store
-.DS_Store
-.DS_Store
+process.env
+
+# Force LF in workflows and shell scripts
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
