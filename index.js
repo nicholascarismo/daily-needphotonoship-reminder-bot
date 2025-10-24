@@ -458,7 +458,7 @@ app.action('good_clear', async ({ ack, body, client, logger }) => {
     // 4) prepend audit line to Notes
     const date = new Date().toISOString().slice(0, 10);
     const by = `@${body.user?.username || body.user?.name || 'user'}`;
-    const newLine = `Cleared from daily reminder on ${date} by ${by}`;
+    const newLine = `Cleared from daily reminder on ${date}`;
     await prependOrderNote(orderId, newLine);
 
     const adminUrl = orderAdminUrl(legacyId);
