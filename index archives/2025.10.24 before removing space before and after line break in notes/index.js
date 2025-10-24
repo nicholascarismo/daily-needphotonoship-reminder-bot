@@ -185,12 +185,15 @@ function orderAdminUrl(legacyId) {
 async function prependOrderNote(orderId, newLine) {
   const noteData = await shopifyGQL(ORDER_NOTE_QUERY_GQL, { id: orderId });
   const existingNote = noteData?.order?.note || '';
-
-  // Standardized separator across apps:
-  const dashLine = '————————————';
-
-  // Only: new line, separator, existing note — no extra blank lines.
-  const updatedNote = [newLine, dashLine, existingNote].join('\n');
+  const updatedNote = [
+    newLine,
+    '',
+    '',
+    '--------',
+    '',
+    '',
+    existingNote
+  ].join('\n');
 
   const res = await shopifyGQL(ORDER_UPDATE_GQL, { input: { id: orderId, note: updatedNote } });
   const errs = res?.orderUpdate?.userErrors || [];
