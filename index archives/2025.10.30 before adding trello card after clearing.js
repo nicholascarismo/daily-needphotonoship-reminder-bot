@@ -486,18 +486,6 @@ app.action('good_clear', async ({ ack, body, client, logger }) => {
 
     await client.chat.postMessage({ channel, thread_ts, text: lines.join('\n') });
 
-    // --- NEW: Create Trello card "[Order#] Cleared - Remember to Process" (no description) ---
-    try {
-      const { listId } = await resolveTrelloIds();
-      const title = `${orderName} Cleared - Remember to Process`; // e.g., "C#1234 Cleared - Remember to Process"
-      await trelloPOST('/cards', { idList: listId, name: title });
-      // Silent success (no extra Slack noise). Log for audit:
-      logger?.info?.({ trelloCardCreated: true, title });
-    } catch (trelloErr) {
-      // Non-fatal: keep the Good/Clear flow resilient
-      logger?.error?.('trello card create failed (good_clear)', trelloErr);
-    }
-
   } catch (e) {
     logger?.error?.('good_clear failed', e);
     await client.chat.postMessage({
