@@ -83,7 +83,6 @@ const ORDER_LOOKUP_GQL = `
           tags
           needsFollowUpMf: metafield(namespace: "custom", key: "_nc_needs_follow_up_") { id value }
           followUpNotesMf: metafield(namespace: "custom", key: "follow_up_notes") { id value }
-          customer { displayName }
         }
       }
     }
@@ -357,10 +356,9 @@ async function extractOrderNamesFromDailyReminder(event, logger) {
 /* =========================
    UI Blocks (two buttons)
 ========================= */
-function actionBlocksDaily({ orderName, customerName, preview }) {
-  const who = customerName ? `${orderName} ${customerName}` : orderName;
+function actionBlocksDaily({ orderName, preview }) {
   return [
-    { type: 'section', text: { type: 'mrkdwn', text: `Daily reminder for *${who}*.` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `Daily reminder for *${orderName}*.` } },
     preview ? { type: 'context', elements: [{ type: 'mrkdwn', text: `_${preview}_` }] } : null,
     {
       type: 'actions',
@@ -372,12 +370,12 @@ function actionBlocksDaily({ orderName, customerName, preview }) {
   ].filter(Boolean);
 }
 
-async function postActionCard({ client, channel, thread_ts, orderName, customerName, preview }) {
+async function postActionCard({ client, channel, thread_ts, orderName, preview }) {
   await client.chat.postMessage({
     channel,
     thread_ts,
     text: `Actions for ${orderName}`,
-    blocks: actionBlocksDaily({ orderName, customerName, preview })
+    blocks: actionBlocksDaily({ orderName, preview })
   });
 }
 
@@ -404,24 +402,14 @@ app.event('message', async ({ event, client, logger }) => {
       '';
 
     for (const orderName of orders) {
-  let customerName = '';
-  try {
-    const order = await getOrderByName(orderName);
-    customerName = order?.customer?.displayName || '';
-  } catch (e) {
-    // Non-fatal: if lookup fails, we still post without the name
-    customerName = '';
-  }
-
-  await postActionCard({
-    client,
-    channel: event.channel,
-    thread_ts: event.ts,
-    orderName,
-    customerName,
-    preview
-  });
-}
+      await postActionCard({
+        client,
+        channel: event.channel,
+        thread_ts: event.ts,
+        orderName,
+        preview
+      });
+    }
   } catch (e) {
     console.error('message handler error', e);
   }
